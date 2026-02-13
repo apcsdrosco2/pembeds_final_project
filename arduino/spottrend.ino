@@ -33,8 +33,8 @@
 // ═══════════════════════════════════════════════════════════════
 // ██ CONFIGURATION — UPDATE THESE VALUES
 // ═══════════════════════════════════════════════════════════════
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASS     = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID     = "ComLab206";
+const char* WIFI_PASS     = "#Ramswifi";
 const char* SERVER_IP     = "192.168.23.249";  // Your PC's local IP running Node.js
 const int   SERVER_PORT   = 3000;
 const int   THRESHOLD_CM  = 5;                // Distance threshold for occupancy (5cm for testing)
@@ -126,8 +126,8 @@ void loop() {
     delay(50);  // 50ms gap prevents ultrasonic crosstalk between sensors
     currentD2 = readDistance(TRIG_2, ECHO_2);
 
-    bool s1Full = (currentD1 < THRESHOLD_CM);
-    bool s2Full = (currentD2 < THRESHOLD_CM);
+    bool s1Full = (currentD1 <= THRESHOLD_CM);
+    bool s2Full = (currentD2 <= THRESHOLD_CM);
 
     // ─── Update LEDs ────────────────────────────────────────
     digitalWrite(LED1_R, s1Full);
@@ -206,7 +206,7 @@ long readDistanceSingle(int trig, int echo) {
   // Increased timeout to 50ms for reliability with WiFi/Servo interrupts
   long duration = pulseIn(echo, HIGH, 50000);
   if (duration == 0) return 999;  // No echo = far away
-  return duration * 0.034 / 2;
+  return (long)((duration * 0.034 / 2.0) + 0.5);  // Round instead of truncate
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -285,8 +285,8 @@ bool sendParkingUpdate(long d1, long d2) {
 
   // Build JSON body — sends both distances AND the Arduino's occupancy determination
   // so the server uses the exact same values as the LCD/LEDs
-  bool s1Occ = (d1 < THRESHOLD_CM);
-  bool s2Occ = (d2 < THRESHOLD_CM);
+  bool s1Occ = (d1 <= THRESHOLD_CM);
+  bool s2Occ = (d2 <= THRESHOLD_CM);
 
   String jsonBody = "{\"slot1_distance\":";
   jsonBody += String(d1);

@@ -1,7 +1,21 @@
 const { createClient } = require('@supabase/supabase-js');
 const config = require('../config');
 
-const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
+// Only create the Supabase client if credentials are actually configured.
+// This prevents the server from crashing when no .env / Supabase is set up,
+// allowing the system to run in local-only mode (Arduino ↔ Server ↔ Dashboard).
+let supabase = null;
+const isSupabaseConfigured =
+  config.supabaseUrl &&
+  config.supabaseServiceKey &&
+  !config.supabaseUrl.includes('your-project-id');
+
+if (isSupabaseConfigured) {
+  supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
+  console.log('[Supabase] Client initialized — cloud sync enabled.');
+} else {
+  console.warn('[Supabase] Not configured — running in local-only mode. Dashboard still works via SSE.');
+}
 
 // ─── Database Schema Setup SQL ─────────────────────────────────────────────
 // Run this SQL in your Supabase SQL Editor to create the tables:
@@ -59,8 +73,6 @@ let localSlots = [
   { id: 1, is_occupied: false, distance_cm: 999, updated_at: new Date().toISOString() },
   { id: 2, is_occupied: false, distance_cm: 999, updated_at: new Date().toISOString() },
 ];
-
-const isSupabaseConfigured = config.supabaseUrl && !config.supabaseUrl.includes('your-project-id');
 
 /**
  * Get current status of all parking slots
