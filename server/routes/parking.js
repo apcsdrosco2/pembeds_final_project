@@ -1,0 +1,68 @@
+const express = require('express');
+const router = express.Router();
+const { getStatus, updateParking } = require('../services/supabase');
+
+/**
+ * GET /api/status
+ * Returns current state of all parking slots
+ */
+router.get('/status', async (req, res) => {
+  try {
+    const slots = await getStatus();
+    const totalOccupied = slots.filter((s) => s.is_occupied).length;
+
+    res.json({
+      success: true,
+      free_spots: 2 - totalOccupied,
+      total_slots: 2,
+      gate_open: totalOccupied < 2,
+      slots,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[GET /api/status] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/update-parking
+ * Called by Arduino R4 WiFi with sensor distances
+ * Body: { slot1_distance: number, slot2_distance: number }
+ */
+router.post('/update-parking', async (req, res) => {
+  try {
+    const { slot1_distance, slot2_distance } = req.body;
+
+    // Validate input
+    if (slot1_distance === undefined || slot2_distance === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing slot1_distance or slot2_distance in request body.',
+      });
+    }
+
+    const d1 = parseFloat(slot1_distance);
+    const d2 = parseFloat(slot2_distance);
+
+    if (isNaN(d1) || isNaN(d2)) {
+      return res.status(400).json({
+        success: false,
+        error: 'slot1_distance and slot2_distance must be numbers.',
+      });
+    }
+
+    const result = await updateParking(d1, d2);
+
+    res.json({
+      success: true,
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[POST /api/update-parking] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+module.exports = router;

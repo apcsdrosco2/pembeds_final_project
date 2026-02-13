@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpotTrend — Smart Parking Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+              950: '#082f49',
+            },
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    /* Animated gradient background */
+    .bg-mesh {
+      background: linear-gradient(135deg, #0c4a6e 0%, #082f49 25%, #0f172a 50%, #1e1b4b 75%, #0f172a 100%);
+      background-size: 400% 400%;
+      animation: meshMove 15s ease infinite;
+    }
+    @keyframes meshMove {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    /* Slot state transitions */
+    .slot-card { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    .slot-occupied { border-color: #ef4444; box-shadow: 0 0 25px rgba(239, 68, 68, 0.3); }
+    .slot-free { border-color: #22c55e; box-shadow: 0 0 25px rgba(34, 197, 94, 0.2); }
+
+    /* Gate animation */
+    .gate-arm {
+      transform-origin: left center;
+      transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .gate-open { transform: rotate(-90deg); }
+    .gate-closed { transform: rotate(0deg); }
+
+    /* Pulse ring for active status */
+    .pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Prediction score circle */
+    .score-circle {
+      transition: stroke-dashoffset 1s ease-in-out;
+    }
+
+    /* Glow effect on cards */
+    .glow-card {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Notification toast */
+    .toast-enter { animation: slideIn 0.3s ease-out; }
+    .toast-exit { animation: slideOut 0.3s ease-in; }
+    @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } }
+    @keyframes slideOut { to { transform: translateY(-20px); opacity: 0; } }
+  </style>
+</head>
+
+<body class="bg-mesh min-h-screen text-white font-sans">
+
+  <!-- Navigation -->
+  <nav class="sticky top-0 z-50 backdrop-blur-xl bg-slate-900/70 border-b border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <!-- Logo -->
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight">Spot<span class="text-brand-400">Trend</span></h1>
+            <p class="text-[10px] text-slate-400 -mt-1 tracking-widest uppercase">Smart Parking</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <div id="connectionBadge" class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/60 border border-slate-700/50 text-xs">
+            <span id="connectionDot" class="w-2 h-2 rounded-full bg-yellow-400 pulse-ring"></span>
+            <span id="connectionText" class="text-slate-300">Connecting...</span>
+          </div>
+          <a href="/simulate.html" class="text-xs text-slate-400 hover:text-brand-400 transition-colors border border-slate-700 rounded-lg px-3 py-1.5 hover:border-brand-400/50">
+            Simulator
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- ─── Status Banner ──────────────────────────────────────── -->
+    <div id="statusBanner" class="glow-card rounded-2xl p-6">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div id="statusIconContainer" class="w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+            <svg id="statusIcon" class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-2xl font-bold">
+              <span id="freeCount">2</span><span class="text-slate-400 text-lg font-normal"> / 2 Spots Free</span>
+            </h2>
+            <p id="statusText" class="text-green-400 font-medium text-sm">Lot is OPEN — Spaces Available</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-6 text-sm text-slate-400">
+          <div class="text-center">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Gate</p>
+            <p id="gateStatus" class="font-semibold text-white">Open</p>
+          </div>
+          <div class="text-center">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Updated</p>
+            <p id="lastUpdated" class="font-semibold text-white">—</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Parking Slots Grid ─────────────────────────────────── -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Slot 1 -->
+      <div id="slot1Card" class="slot-card slot-free glow-card rounded-2xl p-6 border-2 border-green-500/30">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wide">Slot 1</h3>
+          <span id="slot1Badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30">
+            AVAILABLE
+          </span>
+        </div>
+        <div class="flex items-center justify-center h-32 mb-4">
+          <!-- Car SVG / Empty space -->
+          <div id="slot1Visual" class="relative w-full h-full flex items-center justify-center">
+            <!-- Empty parking spot -->
+            <div id="slot1Empty" class="flex flex-col items-center gap-2">
+              <svg class="w-16 h-16 text-green-500/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+              </svg>
+              <span class="text-xs text-green-500/50 font-medium">Empty</span>
+            </div>
+            <!-- Car present -->
+            <div id="slot1Car" class="hidden flex flex-col items-center gap-2">
+              <svg class="w-20 h-16 text-red-400" viewBox="0 0 64 40" fill="currentColor">
+                <path d="M10 28h44v6a2 2 0 01-2 2H12a2 2 0 01-2-2v-6zm2-4l4-12a4 4 0 013.8-2.8h24.4A4 4 0 0148 12l4 12H12zm6 8a3 3 0 100-6 3 3 0 000 6zm28 0a3 3 0 100-6 3 3 0 000 6z"/>
+              </svg>
+              <span class="text-xs text-red-400/70 font-medium">Occupied</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-500">
+          <span>Distance: <span id="slot1Distance" class="text-white font-mono">---</span> cm</span>
+          <span>Sensor: <span class="text-green-400">Active</span></span>
+        </div>
+      </div>
+
+      <!-- Gate Visual -->
+      <div class="glow-card rounded-2xl p-6 flex flex-col items-center justify-center">
+        <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Entry Gate</h3>
+        <div class="relative w-32 h-32">
+          <!-- Gate base -->
+          <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-16 bg-slate-600 rounded-t-lg"></div>
+          <!-- Gate arm -->
+          <div id="gateArm" class="gate-arm gate-closed absolute bottom-14 left-1/2 w-20 h-2 bg-gradient-to-r from-yellow-400 via-yellow-400 to-transparent rounded-full" style="margin-left: 3px;">
+            <div class="absolute -left-1 -top-1 w-4 h-4 rounded-full bg-yellow-400 border-2 border-yellow-500"></div>
+          </div>
+          <!-- Gate label -->
+          <div class="absolute -bottom-2 left-1/2 -translate-x-1/2">
+            <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/>
+            </svg>
+          </div>
+        </div>
+        <p id="gateLabel" class="mt-4 text-sm font-medium text-yellow-400">Gate Open</p>
+        <p class="text-[11px] text-slate-500 mt-1">Servo: <span id="servoAngle">90</span>°</p>
+      </div>
+
+      <!-- Slot 2 -->
+      <div id="slot2Card" class="slot-card slot-free glow-card rounded-2xl p-6 border-2 border-green-500/30">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wide">Slot 2</h3>
+          <span id="slot2Badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30">
+            AVAILABLE
+          </span>
+        </div>
+        <div class="flex items-center justify-center h-32 mb-4">
+          <div id="slot2Visual" class="relative w-full h-full flex items-center justify-center">
+            <div id="slot2Empty" class="flex flex-col items-center gap-2">
+              <svg class="w-16 h-16 text-green-500/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+              </svg>
+              <span class="text-xs text-green-500/50 font-medium">Empty</span>
+            </div>
+            <div id="slot2Car" class="hidden flex flex-col items-center gap-2">
+              <svg class="w-20 h-16 text-red-400" viewBox="0 0 64 40" fill="currentColor">
+                <path d="M10 28h44v6a2 2 0 01-2 2H12a2 2 0 01-2-2v-6zm2-4l4-12a4 4 0 013.8-2.8h24.4A4 4 0 0148 12l4 12H12zm6 8a3 3 0 100-6 3 3 0 000 6zm28 0a3 3 0 100-6 3 3 0 000 6z"/>
+              </svg>
+              <span class="text-xs text-red-400/70 font-medium">Occupied</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-500">
+          <span>Distance: <span id="slot2Distance" class="text-white font-mono">---</span> cm</span>
+          <span>Sensor: <span class="text-green-400">Active</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Plan a Trip / AI Prediction ────────────────────────── -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Plan a Trip Form -->
+      <div class="glow-card rounded-2xl p-6">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-lg">Plan a Trip</h3>
+            <p class="text-xs text-slate-400">AI-powered parking availability prediction</p>
+          </div>
+        </div>
+
+        <form id="predictForm" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Day of Week</label>
+            <select id="predictDay" class="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+              <option value="Sunday">Sunday</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Time</label>
+            <select id="predictHour" class="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all">
+              <option value="6">06:00 AM</option>
+              <option value="7">07:00 AM</option>
+              <option value="8">08:00 AM</option>
+              <option value="9" selected>09:00 AM</option>
+              <option value="10">10:00 AM</option>
+              <option value="11">11:00 AM</option>
+              <option value="12">12:00 PM</option>
+              <option value="13">01:00 PM</option>
+              <option value="14">02:00 PM</option>
+              <option value="15">03:00 PM</option>
+              <option value="16">04:00 PM</option>
+              <option value="17">05:00 PM</option>
+              <option value="18">06:00 PM</option>
+              <option value="19">07:00 PM</option>
+              <option value="20">08:00 PM</option>
+              <option value="21">09:00 PM</option>
+            </select>
+          </div>
+          <button type="submit" id="predictBtn" class="w-full bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-400 hover:to-brand-500 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 shadow-lg shadow-brand-500/20 hover:shadow-brand-500/40 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            <span>Predict Availability</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Prediction Result -->
+      <div class="glow-card rounded-2xl p-6">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-lg">AI Prediction</h3>
+            <p class="text-xs text-slate-400">Powered by Google Gemini</p>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="predictionEmpty" class="flex flex-col items-center justify-center h-48 text-slate-500">
+          <svg class="w-12 h-12 mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <p class="text-sm">Select a day & time to get a prediction</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="predictionLoading" class="hidden flex flex-col items-center justify-center h-48">
+          <div class="w-10 h-10 border-2 border-brand-500/30 border-t-brand-500 rounded-full animate-spin mb-3"></div>
+          <p class="text-sm text-slate-400">Consulting the AI brain...</p>
+        </div>
+
+        <!-- Result State -->
+        <div id="predictionResult" class="hidden">
+          <div class="flex items-center gap-6 mb-6">
+            <!-- Score Circle -->
+            <div class="relative w-24 h-24 flex-shrink-0">
+              <svg class="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" fill="none" class="text-slate-700/50"/>
+                <circle id="scoreCircle" cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8" fill="none"
+                  class="score-circle text-brand-400"
+                  stroke-dasharray="251.2"
+                  stroke-dashoffset="251.2"
+                  stroke-linecap="round"/>
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span id="scoreValue" class="text-xl font-bold">0</span>
+                <span class="text-[10px] text-slate-400">%</span>
+              </div>
+            </div>
+            <div>
+              <span id="occupancyBadge" class="inline-block px-3 py-1 rounded-full text-xs font-bold mb-2">—</span>
+              <p id="predictionQuery" class="text-xs text-slate-500"></p>
+            </div>
+          </div>
+          <div class="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">AI Recommendation</p>
+            <p id="recommendationText" class="text-sm text-slate-200 leading-relaxed">—</p>
+          </div>
+          <div class="flex justify-between mt-3 text-[11px] text-slate-500">
+            <span>Logs analyzed: <span id="logsCount" class="text-white">0</span></span>
+            <span>Source: <span id="predictionSource" class="text-brand-400">—</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Activity Log ──────────────────────────────────────── -->
+    <div class="glow-card rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-lg">Activity Log</h3>
+            <p class="text-xs text-slate-400">Recent parking events</p>
+          </div>
+        </div>
+        <button id="clearLogBtn" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">Clear</button>
+      </div>
+      <div id="activityLog" class="space-y-2 max-h-48 overflow-y-auto pr-2 scrollbar-thin">
+        <div class="text-center py-6 text-slate-600 text-sm">
+          No activity yet. Waiting for sensor data...
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/5 mt-12 py-6 text-center">
+    <p class="text-xs text-slate-500">SpotTrend &copy; 2026 — Group 67 (six-seven) &middot; Embedded Systems x Web Programming</p>
+  </footer>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/realtime.js"></script>
+  <script src="/js/predict.js"></script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpotTrend — Hardware Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 900: '#0c4a6e' },
+          },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="bg-slate-950 text-white min-h-screen font-sans">
+
+  <div class="max-w-2xl mx-auto px-4 py-12">
+
+    <!-- Header -->
+    <div class="text-center mb-10">
+      <h1 class="text-2xl font-bold mb-2">
+        Spot<span class="text-brand-400">Trend</span> Hardware Simulator
+      </h1>
+      <p class="text-slate-400 text-sm">
+        Simulate ultrasonic sensor readings without the Arduino. 
+        Click buttons below to mimic cars entering/exiting parking slots.
+      </p>
+      <a href="/" class="inline-block mt-3 text-xs text-brand-400 hover:underline">&larr; Back to Dashboard</a>
+    </div>
+
+    <!-- Slots -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+
+      <!-- Slot 1 -->
+      <div id="simSlot1" class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 text-center">
+        <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Slot 1</h3>
+        <div id="simSlot1Status" class="text-4xl mb-1">🅿️</div>
+        <p id="simSlot1Label" class="text-green-400 font-semibold text-sm mb-1">Empty</p>
+        <p class="text-xs text-slate-500 mb-4">Distance: <span id="simSlot1Dist" class="text-white font-mono">200</span> cm</p>
+        <div class="flex gap-2">
+          <button onclick="simulateAction(1, 'enter')"
+            class="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors">
+            🚗 Car Enters
+          </button>
+          <button onclick="simulateAction(1, 'exit')"
+            class="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors">
+            🚗 Car Exits
+          </button>
+        </div>
+      </div>
+
+      <!-- Slot 2 -->
+      <div id="simSlot2" class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 text-center">
+        <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Slot 2</h3>
+        <div id="simSlot2Status" class="text-4xl mb-1">🅿️</div>
+        <p id="simSlot2Label" class="text-green-400 font-semibold text-sm mb-1">Empty</p>
+        <p class="text-xs text-slate-500 mb-4">Distance: <span id="simSlot2Dist" class="text-white font-mono">200</span> cm</p>
+        <div class="flex gap-2">
+          <button onclick="simulateAction(2, 'enter')"
+            class="flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors">
+            🚗 Car Enters
+          </button>
+          <button onclick="simulateAction(2, 'exit')"
+            class="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors">
+            🚗 Car Exits
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Distance Control -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 mb-8">
+      <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Custom Sensor Values</h3>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Slot 1 Distance (cm)</label>
+          <input type="number" id="customDist1" value="200" min="0" max="400"
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Slot 2 Distance (cm)</label>
+          <input type="number" id="customDist2" value="200" min="0" max="400"
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500" />
+        </div>
+      </div>
+      <button onclick="sendCustomDistances()"
+        class="w-full bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors">
+        Send Custom Distances
+      </button>
+    </div>
+
+    <!-- Rapid Test -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 mb-8">
+      <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Stress Test</h3>
+      <p class="text-xs text-slate-500 mb-3">Rapidly toggle slot states for lag testing</p>
+      <div class="flex gap-3">
+        <button onclick="startStressTest()" id="stressStartBtn"
+          class="flex-1 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold py-2 rounded-lg transition-colors">
+          ▶ Start Stress Test
+        </button>
+        <button onclick="stopStressTest()" id="stressStopBtn" disabled
+          class="flex-1 bg-slate-700 text-slate-400 text-xs font-semibold py-2 rounded-lg transition-colors cursor-not-allowed">
+          ■ Stop
+        </button>
+      </div>
+      <p id="stressLog" class="text-xs text-slate-600 mt-2"></p>
+    </div>
+
+    <!-- Response Log -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">API Response Log</h3>
+        <button onclick="document.getElementById('responseLog').innerHTML=''" class="text-xs text-slate-600 hover:text-slate-400">Clear</button>
+      </div>
+      <div id="responseLog" class="space-y-2 max-h-64 overflow-y-auto font-mono text-xs"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // ─── Simulator State ─────────────────────────────────────────
+    const simState = { slot1: 200, slot2: 200 };
+    let stressInterval = null;
+
+    // ─── Simulate car enter/exit ─────────────────────────────────
+    function simulateAction(slot, action) {
+      const distance = action === 'enter' ? Math.floor(Math.random() * 15) + 5 : Math.floor(Math.random() * 100) + 100;
+      simState[`slot${slot}`] = distance;
+      updateSimUI(slot, distance);
+      sendUpdate();
+    }
+
+    // ─── Custom distances ────────────────────────────────────────
+    function sendCustomDistances() {
+      simState.slot1 = parseInt(document.getElementById('customDist1').value, 10) || 200;
+      simState.slot2 = parseInt(document.getElementById('customDist2').value, 10) || 200;
+      updateSimUI(1, simState.slot1);
+      updateSimUI(2, simState.slot2);
+      sendUpdate();
+    }
+
+    // ─── Send POST to API ────────────────────────────────────────
+    async function sendUpdate() {
+      try {
+        const res = await fetch('/api/update-parking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slot1_distance: simState.slot1,
+            slot2_distance: simState.slot2,
+          }),
+        });
+        const data = await res.json();
+        logResponse(data);
+      } catch (err) {
+        logResponse({ error: err.message });
+      }
+    }
+
+    // ─── Update Simulator UI ─────────────────────────────────────
+    function updateSimUI(slot, distance) {
+      const occupied = distance < 50;
+      document.getElementById(`simSlot${slot}Status`).textContent = occupied ? '🚗' : '🅿️';
+      document.getElementById(`simSlot${slot}Label`).textContent = occupied ? 'Occupied' : 'Empty';
+      document.getElementById(`simSlot${slot}Label`).className = `font-semibold text-sm mb-1 ${occupied ? 'text-red-400' : 'text-green-400'}`;
+      document.getElementById(`simSlot${slot}Dist`).textContent = distance;
+    }
+
+    // ─── Log API Response ────────────────────────────────────────
+    function logResponse(data) {
+      const log = document.getElementById('responseLog');
+      const time = new Date().toLocaleTimeString();
+      const color = data.success ? 'text-green-400' : 'text-red-400';
+      const entry = document.createElement('div');
+      entry.className = `py-1.5 px-2 rounded bg-slate-800/50 ${color}`;
+      entry.textContent = `[${time}] ${JSON.stringify(data)}`;
+      log.prepend(entry);
+      if (log.children.length > 50) log.lastChild.remove();
+    }
+
+    // ─── Stress Test ─────────────────────────────────────────────
+    let stressCount = 0;
+
+    function startStressTest() {
+      stressCount = 0;
+      document.getElementById('stressStartBtn').disabled = true;
+      document.getElementById('stressStartBtn').className = 'flex-1 bg-slate-700 text-slate-400 text-xs font-semibold py-2 rounded-lg cursor-not-allowed';
+      document.getElementById('stressStopBtn').disabled = false;
+      document.getElementById('stressStopBtn').className = 'flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold py-2 rounded-lg transition-colors';
+
+      stressInterval = setInterval(() => {
+        stressCount++;
+        const slot = Math.random() > 0.5 ? 1 : 2;
+        const action = Math.random() > 0.5 ? 'enter' : 'exit';
+        simulateAction(slot, action);
+        document.getElementById('stressLog').textContent = `Cycle ${stressCount} — Slot ${slot} ${action}`;
+      }, 800);
+    }
+
+    function stopStressTest() {
+      clearInterval(stressInterval);
+      stressInterval = null;
+      document.getElementById('stressStartBtn').disabled = false;
+      document.getElementById('stressStartBtn').className = 'flex-1 bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold py-2 rounded-lg transition-colors';
+      document.getElementById('stressStopBtn').disabled = true;
+      document.getElementById('stressStopBtn').className = 'flex-1 bg-slate-700 text-slate-400 text-xs font-semibold py-2 rounded-lg cursor-not-allowed';
+      document.getElementById('stressLog').textContent = `Stopped after ${stressCount} cycles.`;
+    }
+  </script>
+</body>
+</html>
