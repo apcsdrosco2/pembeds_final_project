@@ -35,9 +35,9 @@
 // ═══════════════════════════════════════════════════════════════
 const char* WIFI_SSID     = "YOUR_WIFI_SSID";
 const char* WIFI_PASS     = "YOUR_WIFI_PASSWORD";
-const char* SERVER_IP     = "192.168.1.100";  // Your PC's local IP running Node.js
+const char* SERVER_IP     = "192.168.23.249";  // Your PC's local IP running Node.js
 const int   SERVER_PORT   = 3000;
-const int   THRESHOLD_CM  = 50;               // Distance threshold for occupancy
+const int   THRESHOLD_CM  = 5;                // Distance threshold for occupancy (5cm for testing)
 const unsigned long POST_INTERVAL   = 5000;   // POST every 5 seconds (minimum)
 const unsigned long SENSOR_INTERVAL = 500;    // Read sensors every 500ms
 
@@ -123,6 +123,7 @@ void loop() {
     lastSensorTime = now;
 
     currentD1 = readDistance(TRIG_1, ECHO_1);
+    delay(50);  // 50ms gap prevents ultrasonic crosstalk between sensors
     currentD2 = readDistance(TRIG_2, ECHO_2);
 
     bool s1Full = (currentD1 < THRESHOLD_CM);
@@ -190,18 +191,41 @@ void loop() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ██ HELPER: Read Ultrasonic Distance
+// ██ HELPER: Single Ultrasonic Reading
 // ═══════════════════════════════════════════════════════════════
-long readDistance(int trig, int echo) {
+long readDistanceSingle(int trig, int echo) {
+  // Clear any stale echo signal
   digitalWrite(trig, LOW);
-  delayMicroseconds(2);
+  delayMicroseconds(5);
+
+  // Send 10µs trigger pulse
   digitalWrite(trig, HIGH);
   delayMicroseconds(10);
   digitalWrite(trig, LOW);
 
-  long duration = pulseIn(echo, HIGH, 30000);  // 30ms timeout
+  // Increased timeout to 50ms for reliability with WiFi/Servo interrupts
+  long duration = pulseIn(echo, HIGH, 50000);
   if (duration == 0) return 999;  // No echo = far away
   return duration * 0.034 / 2;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ██ HELPER: Read Distance with Median Filter (3 samples)
+//   Takes 3 readings and returns the median for noise rejection.
+//   This fixes unreliable single-shot reads caused by WiFi/Servo
+//   interrupt interference on pulseIn timing.
+// ═══════════════════════════════════════════════════════════════
+long readDistance(int trig, int echo) {
+  long readings[3];
+  for (int i = 0; i < 3; i++) {
+    readings[i] = readDistanceSingle(trig, echo);
+    delay(15);  // 15ms between samples — lets echo fully decay
+  }
+  // Simple sort for median
+  if (readings[0] > readings[1]) { long t = readings[0]; readings[0] = readings[1]; readings[1] = t; }
+  if (readings[1] > readings[2]) { long t = readings[1]; readings[1] = readings[2]; readings[2] = t; }
+  if (readings[0] > readings[1]) { long t = readings[0]; readings[0] = readings[1]; readings[1] = t; }
+  return readings[1];  // Return median
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -259,11 +283,19 @@ bool sendParkingUpdate(long d1, long d2) {
     return false;
   }
 
-  // Build JSON body
+  // Build JSON body — sends both distances AND the Arduino's occupancy determination
+  // so the server uses the exact same values as the LCD/LEDs
+  bool s1Occ = (d1 < THRESHOLD_CM);
+  bool s2Occ = (d2 < THRESHOLD_CM);
+
   String jsonBody = "{\"slot1_distance\":";
   jsonBody += String(d1);
   jsonBody += ",\"slot2_distance\":";
   jsonBody += String(d2);
+  jsonBody += ",\"slot1_occupied\":";
+  jsonBody += (s1Occ ? "true" : "false");
+  jsonBody += ",\"slot2_occupied\":";
+  jsonBody += (s2Occ ? "true" : "false");
   jsonBody += "}";
 
   // Send HTTP POST

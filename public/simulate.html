@@ -124,8 +124,13 @@
 
   <script>
     // ─── Simulator State ─────────────────────────────────────────
+    const THRESHOLD = 5;  // Must match Arduino THRESHOLD_CM
     const simState = { slot1: 200, slot2: 200 };
     let stressInterval = null;
+
+    function isOccupied(distance) {
+      return distance < THRESHOLD;
+    }
 
     // ─── Simulate car enter/exit ─────────────────────────────────
     function simulateAction(slot, action) {
@@ -153,6 +158,8 @@
           body: JSON.stringify({
             slot1_distance: simState.slot1,
             slot2_distance: simState.slot2,
+            slot1_occupied: isOccupied(simState.slot1),
+            slot2_occupied: isOccupied(simState.slot2),
           }),
         });
         const data = await res.json();
@@ -164,7 +171,7 @@
 
     // ─── Update Simulator UI ─────────────────────────────────────
     function updateSimUI(slot, distance) {
-      const occupied = distance < 50;
+      const occupied = isOccupied(distance);
       document.getElementById(`simSlot${slot}Status`).textContent = occupied ? '🚗' : '🅿️';
       document.getElementById(`simSlot${slot}Label`).textContent = occupied ? 'Occupied' : 'Empty';
       document.getElementById(`simSlot${slot}Label`).className = `font-semibold text-sm mb-1 ${occupied ? 'text-red-400' : 'text-green-400'}`;

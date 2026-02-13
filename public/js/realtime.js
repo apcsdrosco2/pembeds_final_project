@@ -1,9 +1,50 @@
 /**
- * SpotTrend — Supabase Realtime Subscriptions
- * Listens for live changes on `parking_slots` and updates the dashboard.
+ * SpotTrend — Realtime Updates
+ * Uses SSE (Server-Sent Events) for instant push updates from the server,
+ * with Supabase Realtime as a secondary channel and polling as a final fallback.
  */
 
 let realtimeChannel = null;
+let eventSource = null;
+
+/**
+ * Initialize SSE connection for instant server-push updates.
+ * This works regardless of whether Supabase is configured.
+ */
+function initSSE() {
+  if (eventSource) return; // Already connected
+
+  try {
+    eventSource = new EventSource('/api/stream');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.success) {
+          updateDashboard(data);
+        }
+      } catch (err) {
+        console.error('[SSE] Parse error:', err);
+      }
+    };
+
+    eventSource.onopen = () => {
+      console.log('[SSE] Connected — instant updates active');
+      setConnectionStatus('realtime');
+      stopPolling(); // SSE is live, no need to poll
+    };
+
+    eventSource.onerror = () => {
+      console.warn('[SSE] Connection lost — falling back to polling');
+      eventSource.close();
+      eventSource = null;
+      startPolling();
+    };
+  } catch (err) {
+    console.error('[SSE] Init error:', err);
+    startPolling();
+  }
+}
 
 /**
  * Initialize Supabase Realtime subscription
@@ -11,11 +52,13 @@ let realtimeChannel = null;
  * @param {string} supabaseAnonKey - Supabase anonymous key (public)
  */
 function initRealtime(supabaseUrl, supabaseAnonKey) {
+  // Always start SSE first (works without Supabase)
+  initSSE();
+
   if (!supabaseUrl || !supabaseAnonKey ||
       supabaseUrl === 'https://your-project-id.supabase.co' ||
       supabaseAnonKey === 'your-supabase-anon-key') {
-    console.warn('[Realtime] Supabase not configured — falling back to polling.');
-    startPolling();
+    console.warn('[Realtime] Supabase not configured — using SSE + polling fallback.');
     return;
   }
 

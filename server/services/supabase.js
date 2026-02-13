@@ -83,14 +83,16 @@ async function getStatus() {
 }
 
 /**
- * Update parking slots from sensor data and log state changes
+ * Update parking slots from hardware state
  * @param {number} slot1Distance - Distance reading from sensor 1 (cm)
  * @param {number} slot2Distance - Distance reading from sensor 2 (cm)
- * @param {number} threshold - Occupancy threshold in cm (default 50)
+ * @param {boolean} slot1Occupied - Occupancy state from hardware
+ * @param {boolean} slot2Occupied - Occupancy state from hardware
  */
-async function updateParking(slot1Distance, slot2Distance, threshold = 50) {
-  const slot1Occupied = slot1Distance < threshold;
-  const slot2Occupied = slot2Distance < threshold;
+async function updateParking(slot1Distance, slot2Distance, slot1Occupied, slot2Occupied) {
+  // Hardware is the single source of truth — no server-side threshold
+  slot1Occupied = !!slot1Occupied;
+  slot2Occupied = !!slot2Occupied;
   const totalOccupied = (slot1Occupied ? 1 : 0) + (slot2Occupied ? 1 : 0);
   const freeSpots = 2 - totalOccupied;
   const now = new Date().toISOString();
@@ -104,24 +106,31 @@ async function updateParking(slot1Distance, slot2Distance, threshold = 50) {
   // Update Supabase if configured
   if (isSupabaseConfigured) {
     try {
-      await supabase.from('parking_slots').upsert({ id: 1, is_occupied: slot1Occupied, distance_cm: slot1Distance, updated_at: now });
-      await supabase.from('parking_slots').upsert({ id: 2, is_occupied: slot2Occupied, distance_cm: slot2Distance, updated_at: now });
+      // Parallel upsert for both slots (was sequential — caused delays)
+      await Promise.all([
+        supabase.from('parking_slots').upsert({ id: 1, is_occupied: slot1Occupied, distance_cm: slot1Distance, updated_at: now }),
+        supabase.from('parking_slots').upsert({ id: 2, is_occupied: slot2Occupied, distance_cm: slot2Distance, updated_at: now }),
+      ]);
 
-      // Log state changes
+      // Log state changes in parallel
       const slots = [
         { id: 1, occupied: slot1Occupied, distance: slot1Distance },
         { id: 2, occupied: slot2Occupied, distance: slot2Distance },
       ];
+      const logPromises = [];
       for (const slot of slots) {
         if (previousState[slot.id] !== null && previousState[slot.id] !== slot.occupied) {
-          await supabase.from('parking_logs').insert({
-            slot_id: slot.id,
-            event_type: slot.occupied ? 'entry' : 'exit',
-            distance_cm: slot.distance,
-            total_occupied: totalOccupied,
-          });
+          logPromises.push(
+            supabase.from('parking_logs').insert({
+              slot_id: slot.id,
+              event_type: slot.occupied ? 'entry' : 'exit',
+              distance_cm: slot.distance,
+              total_occupied: totalOccupied,
+            })
+          );
         }
       }
+      if (logPromises.length > 0) await Promise.all(logPromises);
     } catch (err) {
       console.warn('[Supabase] updateParking error:', err.message, '— using local state only');
     }

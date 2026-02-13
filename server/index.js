@@ -41,12 +41,12 @@ app.get('/{*splat}', (req, res) => {
 // ─── Start Server ───────────────────────────────────────────────────────────
 app.listen(config.port, () => {
   console.log(`
-  ╔═══════════════════════════════════════════════╗
-  ║   SpotTrend Parking System — Server Running   ║
-  ╠═══════════════════════════════════════════════╣
-  ║   Dashboard:  http://localhost:${config.port}          ║
-  ║   API:        http://localhost:${config.port}/api      ║
+  ╔═════════════════════════════════════════════════════════════╗
+  ║   SpotTrend Parking System — Server Running                 ║
+  ╠═════════════════════════════════════════════════════════════╣
+  ║   Dashboard:  http://localhost:${config.port}               ║
+  ║   API:        http://localhost:${config.port}/api           ║
   ║   Simulator:  http://localhost:${config.port}/simulate.html ║
-  ╚═══════════════════════════════════════════════╝
+  ╚═════════════════════════════════════════════════════════════╝
   `);
 });

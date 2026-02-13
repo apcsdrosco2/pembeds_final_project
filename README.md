@@ -36,7 +36,6 @@
 ### 1. Install Dependencies
 
 ```bash
-cd smart_parking
 npm install
 ```
 

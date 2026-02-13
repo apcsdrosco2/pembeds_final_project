@@ -33,10 +33,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateDashboard(statusData);
     }
 
-    // Start Supabase Realtime
-    if (SpotTrend.supabaseUrl && SpotTrend.supabaseAnonKey) {
-      initRealtime(SpotTrend.supabaseUrl, SpotTrend.supabaseAnonKey);
-    }
+    // Start Supabase Realtime or fall back to polling
+    // Always call initRealtime — it handles the "not configured" case
+    // by starting the polling fallback automatically.
+    initRealtime(SpotTrend.supabaseUrl, SpotTrend.supabaseAnonKey);
 
     setConnectionStatus('connected');
   } catch (err) {
